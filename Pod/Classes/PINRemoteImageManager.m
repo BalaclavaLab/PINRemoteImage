@@ -78,6 +78,7 @@ float dataTaskPriorityWithImageManagerPriority(PINRemoteImageManagerPriority pri
 
 NSString * const PINRemoteImageManagerErrorDomain = @"PINRemoteImageManagerErrorDomain";
 typedef void (^PINRemoteImageManagerDataCompletion)(NSData *data, NSError *error);
+typedef void (^PINRemoteImageManagerObjectFromCacheBlock)(PINCache *, NSString *, id);
 
 @interface NSOperationQueue (PINRemoteImageManager)
 
@@ -541,72 +542,86 @@ static dispatch_once_t sharedDispatchToken;
          if (taskExisted == NO) {
              [strongSelf.concurrentOperationQueue pin_addOperationWithQueuePriority:priority block:^
               {
+                  PINRemoteImageManagerObjectFromCacheBlock objectFromCacheBlock = ^(PINCache *cache, NSString *key, id object)
+                  {
+                      typeof(self) strongSelf = weakSelf;
+                      [strongSelf.concurrentOperationQueue pin_addOperationWithQueuePriority:priority block:^
+                       {
+                           typeof(self) strongSelf = weakSelf;
+                           if (object) {
+                               PINImage *image = nil;
+                               FLAnimatedImage *animatedImage = nil;
+                               BOOL valid = [strongSelf handleCacheObject:cache
+                                                                   object:object
+                                                                      key:key
+                                                                  options:options
+                                                                 outImage:&image
+                                                         outAnimatedImage:&animatedImage];
+                               
+                               if (valid) {
+                                   typeof(self) strongSelf = weakSelf;
+                                   [strongSelf lock];
+                                   PINRemoteImageTask *task = [strongSelf.tasks objectForKey:key];
+                                   [task callCompletionsWithQueue:strongSelf.callbackQueue remove:NO withImage:image animatedImage:animatedImage cached:YES error:nil];
+                                   [strongSelf.tasks removeObjectForKey:key];
+                                   [strongSelf unlock];
+                               } else {
+                                   //Remove completion and try again
+                                   typeof(self) strongSelf = weakSelf;
+                                   [strongSelf lock];
+                                   PINRemoteImageTask *task = [strongSelf.tasks objectForKey:key];
+                                   [task removeCallbackWithUUID:UUID];
+                                   if (task.callbackBlocks.count == 0) {
+                                       [strongSelf.tasks removeObjectForKey:key];
+                                   }
+                                   [strongSelf unlock];
+                                   
+                                   //Skip early check
+                                   [strongSelf downloadImageWithURL:url
+                                                            options:options | PINRemoteImageManagerDownloadOptionsSkipEarlyCheck
+                                                           priority:priority
+                                                       processorKey:processorKey
+                                                          processor:processor
+                                                      progressImage:(PINRemoteImageManagerImageCompletion)progressImage
+                                                   progressDownload:nil
+                                                         completion:completion
+                                                          inputUUID:UUID];
+                               }
+                           } else {
+                               if ([taskClass isSubclassOfClass:[PINRemoteImageProcessorTask class]]) {
+                                   //continue processing
+                                   [strongSelf downloadImageWithURL:url
+                                                            options:options
+                                                           priority:priority
+                                                                key:key
+                                                          processor:processor
+                                                               UUID:UUID];
+                               } else if ([taskClass isSubclassOfClass:[PINRemoteImageDownloadTask class]]) {
+                                   //continue downloading
+                                   [strongSelf downloadImageWithURL:url
+                                                            options:options
+                                                           priority:priority
+                                                                key:key
+                                                      progressImage:progressImage
+                                                               UUID:UUID];
+                               }
+                           }
+                       }];
+                  };
+                  
                   typeof(self) strongSelf = weakSelf;
-                  [strongSelf.cache objectForKey:key block:^(PINCache *cache, NSString *key, id object)
+                  [strongSelf.cache.memoryCache objectForKey:key block:^(PINMemoryCache * _Nonnull cache, NSString * _Nonnull key, id  _Nullable object)
                    {
                        typeof(self) strongSelf = weakSelf;
-                       [strongSelf.concurrentOperationQueue pin_addOperationWithQueuePriority:priority block:^
-                        {
-                            typeof(self) strongSelf = weakSelf;
-                            if (object) {
-                                PINImage *image = nil;
-                                FLAnimatedImage *animatedImage = nil;
-                                BOOL valid = [strongSelf handleCacheObject:cache
-                                                                    object:object
-                                                                       key:key
-                                                                   options:options
-                                                                  outImage:&image
-                                                          outAnimatedImage:&animatedImage];
-                                
-                                if (valid) {
-                                    typeof(self) strongSelf = weakSelf;
-                                    [strongSelf lock];
-                                        PINRemoteImageTask *task = [strongSelf.tasks objectForKey:key];
-                                        [task callCompletionsWithQueue:strongSelf.callbackQueue remove:NO withImage:image animatedImage:animatedImage cached:YES error:nil];
-                                        [strongSelf.tasks removeObjectForKey:key];
-                                    [strongSelf unlock];
-                                } else {
-                                    //Remove completion and try again
-                                    typeof(self) strongSelf = weakSelf;
-                                    [strongSelf lock];
-                                        PINRemoteImageTask *task = [strongSelf.tasks objectForKey:key];
-                                        [task removeCallbackWithUUID:UUID];
-                                        if (task.callbackBlocks.count == 0) {
-                                            [strongSelf.tasks removeObjectForKey:key];
-                                        }
-                                    [strongSelf unlock];
-                                    
-                                    //Skip early check
-                                    [strongSelf downloadImageWithURL:url
-                                                             options:options | PINRemoteImageManagerDownloadOptionsSkipEarlyCheck
-                                                            priority:priority
-                                                        processorKey:processorKey
-                                                           processor:processor
-                                                       progressImage:(PINRemoteImageManagerImageCompletion)progressImage
-                                                    progressDownload:nil
-                                                          completion:completion
-                                                           inputUUID:UUID];
-                                }
-                            } else {
-                                if ([taskClass isSubclassOfClass:[PINRemoteImageProcessorTask class]]) {
-                                    //continue processing
-                                    [strongSelf downloadImageWithURL:url
-                                                             options:options
-                                                            priority:priority
-                                                                 key:key
-                                                           processor:processor
-                                                                UUID:UUID];
-                                } else if ([taskClass isSubclassOfClass:[PINRemoteImageDownloadTask class]]) {
-                                    //continue downloading
-                                    [strongSelf downloadImageWithURL:url
-                                                             options:options
-                                                            priority:priority
-                                                                 key:key
-                                                       progressImage:progressImage
-                                                                UUID:UUID];
-                                }
-                            }
-                        }];
+                       if (object != nil) {
+                           objectFromCacheBlock(strongSelf.cache, key, object);
+                       } else {
+                           [strongSelf.cache.diskCache objectForKey:key block:^(PINDiskCache * _Nonnull cache, NSString * _Nonnull key, id<NSCoding>  _Nullable object, NSURL * _Nullable fileURL)
+                            {
+                                typeof(self) strongSelf = weakSelf;
+                                objectFromCacheBlock(strongSelf.cache, key, object);
+                            }];
+                       }
                    }];
               }];
          }
@@ -748,6 +763,8 @@ static dispatch_once_t sharedDispatchToken;
 #if USE_FLANIMATED_IMAGE
             animatedImage = [FLAnimatedImage animatedImageWithGIFData:object];
 #endif
+        } else if ([object isKindOfClass:[FLAnimatedImage class]]) {
+            animatedImage = (FLAnimatedImage *)object;
         }
     }
     
@@ -805,7 +822,16 @@ static dispatch_once_t sharedDispatchToken;
         if ([imageData pin_isGIF] && ignoreGIF == NO) {
 #if USE_FLANIMATED_IMAGE
             animatedImage = [[FLAnimatedImage alloc] initWithAnimatedGIFData:imageData];
+            //put in memory cache
+            //FLAnimatedImage handles its own caching of frames
+            NSUInteger cacheCost = [imageData length];
+            [cache.memoryCache setObject:animatedImage
+                                  forKey:key
+                                withCost:cacheCost
+                                   block:NULL];
 #endif
+        } else if ([object isKindOfClass:[FLAnimatedImage class]]) {
+            animatedImage = (FLAnimatedImage *)object;
         } else {
             BOOL skipDecode = (options & PINRemoteImageManagerDownloadOptionsSkipDecode) != 0;
             image = [PINImage pin_decodedImageWithData:imageData skipDecodeIfPossible:skipDecode];
@@ -883,7 +909,7 @@ static dispatch_once_t sharedDispatchToken;
                 
                 id memoryCacheObject = image;
                 if (memoryCacheObject == nil) {
-                    memoryCacheObject = data;
+                    memoryCacheObject = animatedImage;
                 }
                 
                 PINDiskCacheObjectBlock diskCacheCompletion = ^(PINDiskCache *cache, NSString *key, id<NSCoding> object, NSURL *fileURL)
@@ -898,7 +924,7 @@ static dispatch_once_t sharedDispatchToken;
                     [strongSelf unlock];
                 };
                 
-                //store the PINImage in the memory cache and the NSData in the disk cache
+                //store the PINImage and FLAnimatedImage in the memory cache and the NSData in the disk cache
                 [strongSelf.cache.memoryCache setObject:memoryCacheObject
                                                  forKey:key
                                                withCost:cacheCost
@@ -1118,7 +1144,7 @@ static dispatch_once_t sharedDispatchToken;
         }
     }
     
-    [self.cache objectForKey:cacheKey block:^(PINCache *cache, NSString *key, id object)
+    PINRemoteImageManagerObjectFromCacheBlock objectFromCacheBlock = ^(PINCache *cache, NSString *key, id object)
     {
         typeof(self) strongSelf = weakSelf;
         PINImage *image;
@@ -1141,7 +1167,21 @@ static dispatch_once_t sharedDispatchToken;
                                                               resultType:PINRemoteImageResultTypeCache
                                                                     UUID:nil]);
         });
-    }];
+    };
+    
+    [self.cache.memoryCache objectForKey:cacheKey block:^(PINMemoryCache * _Nonnull cache, NSString * _Nonnull key, id  _Nullable object)
+     {
+         typeof(self) strongSelf = weakSelf;
+         if (object != nil) {
+             objectFromCacheBlock(strongSelf.cache, key, object);
+         } else {
+             [strongSelf.cache.diskCache objectForKey:cacheKey block:^(PINDiskCache * _Nonnull cache, NSString * _Nonnull key, id<NSCoding>  _Nullable object, NSURL * _Nullable fileURL)
+              {
+                  typeof(self) strongSelf = weakSelf;
+                  objectFromCacheBlock(strongSelf.cache, key, object);
+              }];
+         }
+     }];
 }
 
 - (PINRemoteImageManagerResult *)synchronousImageFromCacheWithCacheKey:(NSString *)cacheKey options:(PINRemoteImageManagerDownloadOptions)options
