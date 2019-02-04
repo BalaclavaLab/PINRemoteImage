@@ -50,11 +50,11 @@ static inline NSString * PIKeyPathFromOperationState(PIDataTaskOperationState st
 
 + (instancetype)dataTaskOperationWithSessionManager:(PINURLSessionManager *)sessionManager
                                             request:(NSURLRequest *)request
-                                  completionHandler:(void (^)(NSURLResponse *response, NSError *error))completionHandler
+                                  completionHandler:(void (^)(NSURLResponse *response, NSError *error, BOOL isCancelled))completionHandler
 {
     PINDataTaskOperation *operation = [[self alloc] init];
     operation.dataTask = [sessionManager dataTaskWithRequest:request completionHandler:^(NSURLResponse *response, NSError *error) {
-        completionHandler(response, error);
+        completionHandler(response, error, operation.isCancelled);
         if (operation.isCancelled == NO) {
             [operation finish];
         }

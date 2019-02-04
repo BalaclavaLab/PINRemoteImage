@@ -961,7 +961,7 @@ static dispatch_once_t sharedDispatchToken;
     __weak typeof(self) weakSelf = self;
     PINDataTaskOperation *dataTaskOperation = [PINDataTaskOperation dataTaskOperationWithSessionManager:self.sessionManager
                                                                                                 request:request
-                                                                                      completionHandler:^(NSURLResponse *response, NSError *error)
+                                                                                      completionHandler:^(NSURLResponse *response, NSError *error, BOOL isCancelled)
     {
         typeof(self) strongSelf = weakSelf;
 #if DEBUG
@@ -979,13 +979,15 @@ static dispatch_once_t sharedDispatchToken;
             PINLog(@"Finished downloading image: %@", url);
         }
 #endif
-        if (error.code != NSURLErrorCancelled) {
+        if (error.code != NSURLErrorCancelled && isCancelled == NO) {
             [strongSelf lock];
                 PINRemoteImageDownloadTask *task = [strongSelf.tasks objectForKey:key];
                 NSData *data = task.progressImage.data;
             [strongSelf unlock];
             
-            completion(data, error);
+            if (data != nil || error != nil) {
+                completion(data, error);
+            }
         }
     }];
     
@@ -1228,6 +1230,10 @@ static dispatch_once_t sharedDispatchToken;
 {
     [self lock];
         PINRemoteImageDownloadTask *task = [self.tasks objectForKey:[self cacheKeyForURL:[[dataTask originalRequest] URL] processorKey:nil]];
+        if (task.urlSessionTaskOperation.dataTask.taskIdentifier != dataTask.taskIdentifier) {
+            [self unlock];
+            return;
+        }
         if (task.progressImage == nil) {
             task.progressImage = [[PINProgressiveImage alloc] init];
             task.progressImage.startTime = task.sessionTaskStartTime;
@@ -1270,6 +1276,10 @@ static dispatch_once_t sharedDispatchToken;
         NSURLSessionDataTask *dataTask = (NSURLSessionDataTask *)task;
         [self lock];
             PINRemoteImageDownloadTask *task = [self.tasks objectForKey:[self cacheKeyForURL:[[dataTask originalRequest] URL] processorKey:nil]];
+            if (task.urlSessionTaskOperation.dataTask.taskIdentifier != dataTask.taskIdentifier) {
+                [self unlock];
+                return;
+            }
             task.sessionTaskEndTime = CACurrentMediaTime();
             CFTimeInterval taskLength = task.sessionTaskEndTime - task.sessionTaskStartTime;
         [self unlock];

@@ -16,6 +16,6 @@
 
 + (nonnull instancetype)dataTaskOperationWithSessionManager:(nonnull PINURLSessionManager *)sessionManager
                                                     request:(nonnull NSURLRequest *)request
-                                          completionHandler:(nonnull void (^)(NSURLResponse * _Nonnull response, NSError * _Nullable error))completionHandler;
+                                          completionHandler:(nonnull void (^)(NSURLResponse * _Nonnull response, NSError * _Nullable error, BOOL isCancelled))completionHandler;
 
 @end
