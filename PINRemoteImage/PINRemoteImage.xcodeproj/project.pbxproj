@@ -87,7 +87,7 @@
 		F1B918FD1BCF23C800710963 /* PINURLSessionManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PINURLSessionManager.h; path = ../../Pod/Classes/PINURLSessionManager.h; sourceTree = "<group>"; };
 		F1B918FE1BCF23C900710963 /* PINURLSessionManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = PINURLSessionManager.m; path = ../../Pod/Classes/PINURLSessionManager.m; sourceTree = "<group>"; };
 		F1B919221BCF273F00710963 /* PINCache.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = PINCache.framework; path = ../Carthage/Build/iOS/PINCache.framework; sourceTree = "<group>"; };
-		F1E3658B1BE04112003BF022 /* module.modulemap */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
+		F1E3658B1BE04112003BF022 /* PINRemoteImage.modulemap */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = "sourcecode.module-map"; path = PINRemoteImage.modulemap; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -174,7 +174,7 @@
 				F165DFD71BD021EE0008C6E8 /* Project */,
 				68EB25221C6A64BE002501A3 /* Supporting Files */,
 				F1B918D61BCF239200710963 /* Info.plist */,
-				F1E3658B1BE04112003BF022 /* module.modulemap */,
+				F1E3658B1BE04112003BF022 /* PINRemoteImage.modulemap */,
 			);
 			path = PINRemoteImage;
 			sourceTree = "<group>";
@@ -429,7 +429,7 @@
 				INFOPLIST_FILE = PINRemoteImage/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MODULEMAP_FILE = PINRemoteImage/module.modulemap;
+				MODULEMAP_FILE = PINRemoteImage/PINRemoteImage.modulemap;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinterest.PINRemoteImage;
 				SKIP_INSTALL = YES;
 			};
@@ -446,7 +446,7 @@
 				INFOPLIST_FILE = PINRemoteImage/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
-				MODULEMAP_FILE = PINRemoteImage/module.modulemap;
+				MODULEMAP_FILE = PINRemoteImage/PINRemoteImage.modulemap;
 				PRODUCT_BUNDLE_IDENTIFIER = com.pinterest.PINRemoteImage;
 				SKIP_INSTALL = YES;
 			};
