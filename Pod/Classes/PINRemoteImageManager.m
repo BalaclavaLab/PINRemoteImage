@@ -624,6 +624,8 @@ static dispatch_once_t sharedDispatchToken;
                        }
                    }];
               }];
+         } else {
+             [task setPriority:priority];
          }
      }];
 
