@@ -384,6 +384,22 @@ static dispatch_once_t sharedDispatchToken;
 
 - (NSUUID *)downloadImageWithURL:(NSURL *)url
                          options:(PINRemoteImageManagerDownloadOptions)options
+                        priority:(PINRemoteImageManagerPriority)priority
+                      completion:(PINRemoteImageManagerImageCompletion)completion
+{
+    return [self downloadImageWithURL:url
+                              options:options
+                             priority:priority
+                         processorKey:nil
+                            processor:nil
+                        progressImage:nil
+                     progressDownload:nil
+                           completion:completion
+                            inputUUID:nil];
+}
+
+- (NSUUID *)downloadImageWithURL:(NSURL *)url
+                         options:(PINRemoteImageManagerDownloadOptions)options
                    progressImage:(PINRemoteImageManagerImageCompletion)progressImage
                       completion:(PINRemoteImageManagerImageCompletion)completion
 {
@@ -440,6 +456,24 @@ static dispatch_once_t sharedDispatchToken;
     return [self downloadImageWithURL:url
                               options:options
                              priority:PINRemoteImageManagerPriorityMedium
+                         processorKey:processorKey
+                            processor:processor
+                        progressImage:nil
+                     progressDownload:nil
+                           completion:completion
+                            inputUUID:nil];
+}
+
+- (NSUUID *)downloadImageWithURL:(NSURL *)url
+                         options:(PINRemoteImageManagerDownloadOptions)options
+                        priority:(PINRemoteImageManagerPriority)priority
+                    processorKey:(NSString *)processorKey
+                       processor:(PINRemoteImageManagerImageProcessor)processor
+                      completion:(PINRemoteImageManagerImageCompletion)completion
+{
+    return [self downloadImageWithURL:url
+                              options:options
+                             priority:priority
                          processorKey:processorKey
                             processor:processor
                         progressImage:nil
