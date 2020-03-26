@@ -134,6 +134,15 @@ typedef void(^PINRemoteImageManagerProgressDownload)(int64_t completedBytes, int
 - (nonnull instancetype)initWithSessionConfiguration:(nullable NSURLSessionConfiguration *)configuration;
 
 /**
+ Create and return a PINRemoteImageManager created with the specified configuration, maximum number of download retries and base delay for download retries. If configuration is nil, [NSURLSessionConfiguration defaultConfiguration] is used. You specify a custom configuration if you need to configure timeout values, cookie policies, additional HTTP headers, etc.
+ @param configuration The configuration used to create the PINRemoteImageManager.
+ @param retryDownloadBaseDelay The base delay for download retries (in seconds).
+ @param retryDownloadMaxCount The maximum number of download retries.
+ @return A PINRemoteImageManager with the specified configuration.
+ */
+- (nonnull instancetype)initWithSessionConfiguration:(nullable NSURLSessionConfiguration *)configuration retryDownloadBaseDelay:(NSInteger)retryDownloadBaseDelay retryDownloadMaxCount:(NSInteger)retryDownloadMaxCount;
+
+/**
  Get the shared instance of PINRemoteImageManager
  
  @return Shared instance of PINRemoteImageManager

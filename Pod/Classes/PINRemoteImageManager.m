@@ -100,6 +100,7 @@ typedef void (^PINRemoteImageManagerObjectFromCacheBlock)(PINCache *, NSString *
     dispatch_queue_t _callbackQueue;
     PINRemoteLock *_lock;
     NSOperationQueue *_concurrentOperationQueue;
+    dispatch_queue_t _retryDownloadQueue;
     NSOperationQueue *_urlSessionTaskQueue;
 }
 
@@ -114,6 +115,9 @@ typedef void (^PINRemoteImageManagerObjectFromCacheBlock)(PINCache *, NSString *
 @property (nonatomic, assign) NSTimeInterval estimatedRemainingTimeThreshold;
 @property (nonatomic, strong) dispatch_queue_t callbackQueue;
 @property (nonatomic, strong) NSOperationQueue *concurrentOperationQueue;
+@property (nonatomic, assign) NSInteger retryDownloadBaseDelay;
+@property (nonatomic, strong) dispatch_queue_t retryDownloadQueue;
+@property (nonatomic, assign) NSInteger retryDownloadMaxCount;
 @property (nonatomic, strong) NSOperationQueue *urlSessionTaskQueue;
 @property (nonatomic, strong) NSMutableArray <PINTaskQOS *> *taskQOS;
 @property (nonatomic, assign) float highQualityBPSThreshold;
@@ -169,6 +173,11 @@ static dispatch_once_t sharedDispatchToken;
 
 - (instancetype)initWithSessionConfiguration:(NSURLSessionConfiguration *)configuration
 {
+    return [self initWithSessionConfiguration:configuration retryDownloadBaseDelay:2.0 retryDownloadMaxCount:3.0];
+}
+
+- (instancetype)initWithSessionConfiguration:(NSURLSessionConfiguration *)configuration retryDownloadBaseDelay:(NSInteger)retryDownloadBaseDelay retryDownloadMaxCount:(NSInteger)retryDownloadMaxCount
+{
     if (self = [super init]) {
         self.cache = [self defaultImageCache];
         if (!configuration) {
@@ -182,6 +191,7 @@ static dispatch_once_t sharedDispatchToken;
         if ([[self class] supportsQOS]) {
             _concurrentOperationQueue.qualityOfService = NSQualityOfServiceUtility;
         }
+        _retryDownloadQueue = dispatch_queue_create("PINRemoteImageManagerRetryDownloadQueue", DISPATCH_QUEUE_CONCURRENT);
         _urlSessionTaskQueue = [[NSOperationQueue alloc] init];
         _urlSessionTaskQueue.name = @"PINRemoteImageManager Concurrent URL Session Task Queue";
         _urlSessionTaskQueue.maxConcurrentOperationCount = 10;
@@ -191,6 +201,9 @@ static dispatch_once_t sharedDispatchToken;
         
         self.estimatedRemainingTimeThreshold = 0.0;
         self.timeout = PINRemoteImageManagerDefaultTimeout;
+        
+        self.retryDownloadBaseDelay = retryDownloadBaseDelay;
+        self.retryDownloadMaxCount = retryDownloadMaxCount;
         
         _highQualityBPSThreshold = 500000;
         _lowQualityBPSThreshold = 50000; // approximately edge speeds
@@ -563,6 +576,12 @@ static dispatch_once_t sharedDispatchToken;
     #if PINRemoteImageLogging
                  task.key = key;
     #endif
+                 if ([task isKindOfClass:[PINRemoteImageDownloadTask class]]) {
+                     
+                     PINRemoteImageDownloadTask *downloadTask = task;
+                     downloadTask.retryBaseDelay = strongSelf.retryDownloadBaseDelay;
+                     downloadTask.retryMaxCount = strongSelf.retryDownloadMaxCount;
+                 }
              } else {
                  taskExisted = YES;
                  PINLog(@"Task exists, attaching with key: %@, URL: %@, UUID: %@, task: %@", key, url, UUID, task);
@@ -972,12 +991,28 @@ static dispatch_once_t sharedDispatchToken;
                                                     block:diskCacheCompletion];
                 }];
             } else {
-                //call all of the completion blocks and remove the session task
                 [strongSelf lock];
                     typeof(self) strongSelf = weakSelf;
                     PINRemoteImageDownloadTask *task = [strongSelf.tasks objectForKey:key];
-                    [task callCompletionsWithQueue:strongSelf.callbackQueue remove:NO withImage:image animatedImage:animatedImage cached:NO error:remoteImageError];
-                    [strongSelf.tasks removeObjectForKey:key];
+                    BOOL isRetriableError = !(remoteImageError.domain == PINRemoteImageManagerErrorDomain &&
+                                              remoteImageError.code == PINRemoteImageManagerErrorFailedToDecodeImage);
+                    if (isRetriableError == NO || task.retryCount >= task.retryMaxCount) {
+                        //call all of the completion blocks and remove the session task
+                        [task callCompletionsWithQueue:strongSelf.callbackQueue remove:NO withImage:image animatedImage:animatedImage cached:NO error:remoteImageError];
+                        [strongSelf.tasks removeObjectForKey:key];
+                    } else {
+                        // retry download
+                        task.retryCount += 1;
+                        task.progressImage = nil;
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(task.retryDelay * NSEC_PER_SEC)), strongSelf.retryDownloadQueue, ^{
+                            
+                            typeof(self) strongSelf = weakSelf;
+                            [strongSelf lock];
+                                PINRemoteImageDownloadTask *task = [strongSelf.tasks objectForKey:key];
+                                task.urlSessionTaskOperation = [strongSelf sessionTaskWithURL:URL key:key options:options priority:priority];
+                            [strongSelf unlock];
+                        });
+                    }
                 [strongSelf unlock];
             }
         }];
