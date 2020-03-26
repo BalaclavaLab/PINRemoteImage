@@ -23,6 +23,9 @@
 {
     if (self = [super init]) {
         _canSetDataTaskPriority = [NSURLSessionTask instancesRespondToSelector:@selector(setPriority:)];
+        _retryBaseDelay = 0;
+        _retryCount = 0;
+        _retryMaxCount = 0;
     }
     return self;
 }
@@ -88,6 +91,11 @@
         PINLog(@"Decrementing download of URL: %@, UUID: %@", self.urlSessionTaskOperation.dataTask.originalRequest.URL, UUID);
     }
     return noMoreCompletions;
+}
+
+- (NSInteger)retryDelay {
+    
+    return self.retryCount * self.retryBaseDelay;
 }
 
 - (void)setPriority:(PINRemoteImageManagerPriority)priority
